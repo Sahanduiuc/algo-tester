@@ -5,9 +5,16 @@ import math
 from tqdm import tqdm
 import math as m
 
+zero_fun = lambda x: 0.0
 one_fun = lambda x: 1.0
 one_fun_nan = lambda x: np.nan if np.isnan(x) else 1.0
+neg_fun = lambda x: -x
 nan_fun = lambda x: np.nan
+sign_fun = lambda x: np.sign(x)
+z_sign_fun = lambda x, a: -x if x > a or x < -a else 0.0
+
+
+pd.options.mode.chained_assignment = None
 
 
 def get_data_on_dates(df, dates):
@@ -26,10 +33,24 @@ def sigmoid(x, val=1):
     return 2.0/(1.0+math.exp(-val*x))
 
 
+def get_sig_over_night(sig, hold_posi_ON=True):
+    if hold_posi_ON:
+        return sig
+    else:
+        nr = sig.shape[0]
+        dates = sig.index
+        for i in range(nr-1):
+            if dates[i].date() != dates[i+1].date():
+                sig.iloc[i, :] = 0
+        return sig
+
+
 def portfolio_allocation(signals, prices, weighing_scheme="LO_Sigmoid",
-                         vol_trg=False, vol_period=66, sigmoid_val=1, norm_row=False):
+                         vol_trg=False, vol_period=66, sigmoid_val=1, norm_row=False, hold_posi_ON=True):
     dates = prices.index
-    signals_ = get_data_on_dates(signals, dates)
+
+    signals_ = get_sig_over_night(signals, hold_posi_ON)
+    signals_ = get_data_on_dates(signals_, dates)
 
     if vol_trg:
         ret = prices.pct_change()
@@ -70,7 +91,7 @@ def performance_analysis(prices, allocation, cost=0.0, freq=1):
     pnl = rets.applymap(nan_fun)
 
     for i in tqdm(range(1, n_dates)):
-        pnl.ix[i, :] = alloc_.ix[i-1, :].values * rets.ix[i, :].values - abs(cost)*np.abs(alloc_.ix[i-1, :].values - alloc_.ix[i, :].values)
+        pnl.iloc[i, :] = alloc_.iloc[i-1, :].values * rets.iloc[i, :].values - abs(cost)*np.abs(alloc_.iloc[i-1, :].values - alloc_.iloc[i, :].values)
 
     pnl["Combined"] = np.sum(pnl, 1) #row wise sum
     cummPnl = np.cumsum(pnl, axis=0)
